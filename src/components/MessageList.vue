@@ -31,9 +31,23 @@
             <el-header height="60px" style="border-bottom: 1px solid #e6e6e6;padding: 0;">
               <div style="text-align: left;margin-left: 20px"><h3>{{ chooseData.nickName }}</h3></div>
             </el-header>
-            <el-main class="chat-body" style="height: 500px;line-height: 30px;padding: 0;overflow-y: auto">
-              <ul v-for="item in messageList" :key="item.id">
-                <li class="chat-list-li">{{ item.content }}</li>
+            <el-main id="chat-body" class="chat-body"
+                     style="height: 500px;line-height: 30px;padding: 0;overflow-y: auto">
+              <ul>
+                <li v-for="item in messageList" :key="item.id" class="chat-list-li" style="min-height: 60px">
+                  <div :class="{'send':item.sendUserId === userId,'receiver':item.sendUserId !== userId}">
+                    <div v-if="item.sendUserId === userId">
+                      <el-avatar :size="40" :src="item.sendUserAvatar"
+                                 style="float: right;margin-right: 10px;"></el-avatar>
+                      <div class="chatBox chatBox-left">{{ item.content }}</div>
+                    </div>
+                    <div v-else>
+                      <el-avatar :size="40" :src="item.sendUserAvatar"
+                                 style="float: left;margin-left: 10px;"></el-avatar>
+                      <div class="chatBox chatBox-right">{{ item.content }}</div>
+                    </div>
+                  </div>
+                </li>
               </ul>
             </el-main>
             <el-footer v-show="JSON.stringify(chooseData) !== '{}'" height="230px"
@@ -73,28 +87,39 @@ export default {
       userId: '',
       msg: '',
       messageList: [],
+      messageListFromServer: [],
       chooseData: {},
       chatList: [],
       pageNum: 1,
       pageSize: 10,
       messagePage: {
         pageNum: 1,
-        pageSize: 10,
+        pageSize: 30,
         chatId: '',
       },
-      websocketData: {}
+      websocketData: {},
+      isChatId: '',
     };
+  },
+  watch: {
+    messageList(newVal, oldVal) {
+      // 调用函数，确保滚动条处于底部
+      this.goBotom();
+    }
   },
   methods: {
     getMessageList() {
       const params = {
-        pageNum: this.pageNum,
-        pageSize: this.pageSize,
+        pageNum: this.messagePage.pageNum,
+        pageSize: this.messagePage.pageSize,
         chatId: this.chooseData.chatId
       }
       ChatRequest.getMessageList(params).then(res => {
         if (res.code === 200) {
-          this.messageList = res.data.resData;
+          this.messageListFromServer = res.data.resData.reverse();
+          this.messageList = this.messageList.concat(this.messageListFromServer);
+          this.isChatId = this.chooseData.chatId;
+          this.goBotom()
         } else {
           this.$message({
             type: 'error',
@@ -127,7 +152,12 @@ export default {
         }
         this.$socket.send(JSON.stringify(sendMessage));
         this.getChatList();
-        this.getMessageList();
+        this.messageList.push({
+          chatId: this.chooseData.chatId,
+          content: this.msg,
+          sendUserId: this.userId,
+          sendUserAvatar: JSON.parse(localStorage.getItem('userInfo')).avatar,
+        })
       } else
         this.$message.error('不能发送空消息');
       this.msg = '';
@@ -141,8 +171,7 @@ export default {
       if (start === undefined || end === undefined) return
       const txt = elInput.value;
       // 将表情添加到选中的光标位置
-      const result =
-          txt.substring(0, start) + emoji.data + txt.substring(end);
+      const result = txt.substring(0, start) + emoji.data + txt.substring(end);
       elInput.value = result // 赋值给input的value
       // 重置光标位置
       elInput.focus()
@@ -151,19 +180,28 @@ export default {
       this.msg = result // 赋值(注意这里一定要赋值给表情输入框绑定的那个值)
     },
     chooseChat(val) {
+      this.messageList = [];
       this.chooseData = {
         chatId: val.id,
         nickName: val.nickName,
         receiverUserId: val.receiverId
       }
+
       this.getMessageList();
+      this.goBotom();
     },
     callBack(data) {
       this.websocketData = data.data
-      console.log(this.websocketData)
       this.getChatList();
-      if (this.chooseData.chatId !== undefined)
-        this.getMessageList();
+      if (this.chooseData.chatId !== undefined) {
+        const data1 = JSON.parse(data.data);
+        if (data1.receiverUserId === this.userId)
+          this.messageList.push(data1);
+      }
+    },
+    goBotom() {
+      const messageList = document.getElementById('chat-body'); // 替换 'message-list' 为您实际的消息列表的 ID
+      messageList.scrollTop = messageList.scrollHeight;
     }
   }, mounted() {
     if (localStorage.getItem('userInfo')) {
@@ -173,6 +211,12 @@ export default {
       this.$router.push('login')
     }
     this.$socket.registerCallBack(this.callBack)
+  },
+  beforeDestroy() {
+    this.$socket.unRegisterCallBack(this.callBack)
+  },
+  updated() {
+    this.goBotom()
   }
 };
 </script>
@@ -186,9 +230,68 @@ export default {
   overflow-y: auto;
 
   .msg-body {
-    width: 80%;
+    width: 70%;
     display: block; /* 或者其他块级元素的 display 属性 */
     margin: 10px auto; /* 在水平方向上居中 */
+
+    .chat-body {
+      height: 500px;
+      overflow-y: auto;
+
+      /* 聊天框中的消息列表样式 */
+      .chat-list-li {
+        list-style: none;
+        min-height: 60px;
+        margin-bottom: 10px; /* 调整每条消息之间的间距 */
+        overflow: auto; /* 添加滚动条，当内容溢出时 */
+      }
+
+      .chat-list-li .send {
+        text-align: right;
+      }
+
+      .chat-list-li .receiver {
+        text-align: left;
+      }
+
+      .chat-list-li .chatBox {
+        display: inline-block;
+        max-width: 70%; /* 聊天框最大宽度 */
+        padding: 10px;
+        border-radius: 10px;
+        margin: 5px;
+        word-wrap: break-word; /* 长消息换行 */
+      }
+
+      .chat-list-li .chatBox-left {
+        background-color: #f0f0f0; /* 左侧聊天框背景色 */
+        text-align: left; /* 确保左侧消息对齐 */
+      }
+
+      .chat-list-li .chatBox-right {
+        background-color: #d9f9ec; /* 右侧聊天框背景色 */
+        text-align: right; /* 确保右侧消息对齐 */
+      }
+
+      .chat-list-li .el-avatar {
+        vertical-align: middle;
+      }
+
+      /* 根据发送者和接收者不同样式化头像位置 */
+      .chat-list-li .el-avatar {
+        margin: 5px; /* 调整头像与聊天框之间的间距 */
+      }
+
+      .chat-list-li .send .el-avatar {
+        float: right; /* 右浮动，发送者头像在右边 */
+        margin-left: 10px; /* 调整发送者头像的左边距 */
+      }
+
+      .chat-list-li .receiver .el-avatar {
+        float: left; /* 左浮动，接收者头像在左边 */
+        margin-right: 10px; /* 调整接收者头像的右边距 */
+      }
+    }
 
     .el-card__body, .el-main {
       padding: 0;

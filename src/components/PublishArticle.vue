@@ -114,6 +114,13 @@ export default {
             duration: 1000
           })
       })
+    }, callBack(data) {
+      this.$notify({
+        title: data.title,
+        message: data.msg,
+        offset: 70,
+        duration: 3000
+      })
     },
     handleRemove(file, fileList) {
       console.log(file, fileList);
@@ -123,6 +130,13 @@ export default {
       this.dialogVisible = true;
     }
   },
+  mounted() {
+    this.$socket.registerCallBack(this.callBack);
+  },
+  destroyed() {
+    this.$socket.unRegisterCallBack(this.callBack);
+  }
+
 };
 </script>
 <style lang="scss">

@@ -4,6 +4,45 @@
         class="el-icon-upload2"
         style="font-size: 24px"></i>
     </el-button>
+    <div class="float-button">
+      <div style="display: flex;flex-direction: column;align-items: baseline">
+        <el-button style="margin-bottom: 10px" title="关注列表" @click="getFollowerList"><i
+            class="el-icon-user button"></i></el-button>
+        <el-button @click="2"><i class="el-icon-edit-outline button"></i></el-button>
+      </div>
+    </div>
+    <div class="update-userInfo">
+      <el-dialog
+          :visible.sync="updateVisible"
+          lock-scroll="false"
+          style="overflow-y: hidden;"
+          title="关注列表"
+          top="100px"
+          width="45%">
+        <div style="overflow-y: auto;height: 600px">
+          <ul v-for="item in followList" :key="item.id">
+            <li class="follower-list">
+              <div
+                  style="display: flex;flex-direction: row;flex-wrap: nowrap;align-items: center;justify-content: flex-start;">
+                <el-avatar :src="item.beAccountAvatar"></el-avatar>
+                <h2 style="margin-left: 5px">{{ item.beAccountNickName }}</h2>
+              </div>
+              <div
+                  style="display: flex;align-items: center;margin-right: 10px">
+                <el-button class="follower-button" @click="delFollower(item.beAccountId)">取关</el-button>
+                <el-button class="follower-button" @click="sendMessageChat(item.beAccountId)">私信</el-button>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <span slot="footer" class="dialog-footer">
+    <el-button type="primary" @click="updateVisible = false">关 闭</el-button>
+  </span>
+      </el-dialog>
+    </div>
+    <div class="follower-list">
+
+    </div>
     <el-container class="body">
       <el-header class="header" height="300px">
         <div class="header-avatar">
@@ -31,7 +70,9 @@
             <el-descriptions-item class="info-item" label="性别">
               <el-tag size="small">{{ userInfo.sex === '0' ? '男' : userInfo.sex === '1' ? '女' : '未知' }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="联系地址">江苏省苏州市吴中区吴中大道 1188 号</el-descriptions-item>
+            <el-descriptions-item label="个性签名">
+              {{ userInfo.signature === undefined ? "这个人很懒什么都没留下" : userInfo.signature }}
+            </el-descriptions-item>
           </el-descriptions>
         </div>
       </el-header>
@@ -98,11 +139,14 @@
 <script>
 
 import user from "@/request/User";
+import User from "@/request/User";
 import Article from "@/request/Article";
+import ChatRequest from "@/request/ChatRequest";
 
 export default {
   data() {
     return {
+      updateVisible: false,
       showGoTop: false,
       userInfo: {},
       articleList: [],
@@ -161,10 +205,57 @@ export default {
           username: "sg333"
         }
       ],
-      loginUserId: ''
+      loginUserId: '',
+      followList: []
     }
   },
   methods: {
+    delFollower(beId) {
+      Article.delFollower({
+        beAccountId: beId,
+        AccountId: this.loginUserId
+      }).then(res => {
+        if (res.code === 200) {
+          this.$message({
+            type: 'success',
+            message: res.msg,
+            duration: 3000
+          })
+          this.getFollowerList();
+        } else {
+          this.$message({
+            type: 'error',
+            message: res.msg,
+            duration: 3000
+          });
+        }
+      })
+    },
+    sendMessageChat(id) {
+      const params = {
+        user1Id: this.loginUserId,
+        user2Id: id
+      }
+      ChatRequest.addChat(params).then(res => {
+        if (res.code === 200) {
+          this.$router.push('messageList');
+        } else {
+          this.$message({
+            type: 'error',
+            message: res.msg,
+            duration: 3000
+          })
+        }
+      })
+    },
+    getFollowerList() {
+      this.updateVisible = true;
+      User.getFollower(this.loginUserId).then(res => {
+        if (res.code === 200) {
+          this.followList = res.data;
+        }
+      })
+    },
     delArticle(id) {
       Article.delArticle(id).then(res => {
         if (res.code === 200) {
@@ -261,6 +352,42 @@ export default {
   --article-nickname-createTime-lift: 15px;
   overflow-y: auto;
   height: 100%;
+
+  .update-userInfo {
+
+    .follower-list {
+      display: flex;
+      justify-content: space-between;
+      height: 60px;
+      padding-left: 10px;
+
+      .follower-button {
+        height: 40px;
+      }
+    }
+
+    .follower-list:hover {
+      background-color: #f7f7f7;
+    }
+  }
+
+  .float-button {
+    position: absolute;
+    top: 70px;
+    right: 23%;
+    z-index: 20;
+
+    .el-button {
+      margin: 0;
+      padding: 10px;
+
+      .button {
+        font-size: 30px;
+      }
+    }
+
+
+  }
 
   .go-top {
     position: absolute;
